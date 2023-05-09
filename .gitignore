@@ -1,0 +1,12 @@
+venv
+allure-results
+allure-report
+.idea
+.pytest_cache
+video
+__pycache__/
+.vscode/
+.flake8
+.env
+.DS_Store
+local_*.*
