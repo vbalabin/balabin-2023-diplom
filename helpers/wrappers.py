@@ -19,10 +19,28 @@ from playwright.sync_api._generated import (APIResponse, APIResponseAssertions,
 
 class WrappedLocator(Locator):
 
+    def wait_dom_loaded(self, timeout=1500):
+        self.page.wait_for_timeout(timeout)
+        counter = 0
+        while counter < 5:
+            content_before = self.page.content()
+            self.page.wait_for_timeout(timeout)
+            content_after = self.page.content()
+            if content_before == content_after:
+                return
+            counter += 1
+
     @property
     def selector(self):
-        res = re.search("selector='(.+)'", str(self))
+        res = re.search("selector=[\',\"](.+)[\',\"]", str(self))
         return res.group(1)
+
+    @property
+    def first(self):
+        return patch_locator(super().first)
+
+    def all(self) -> List["WrappedLocator"]:
+        return [patch_locator(loc) for loc in super().all()]
 
     def attach_screnshot(self, timeout: Optional[float], text: str = 'element'):
         if os.getenv('ATTACH_ELEMENTS'):
@@ -67,9 +85,16 @@ class WrappedLocator(Locator):
             Locator.fill(self, value, timeout=timeout, no_wait_after=no_wait_after, force=force)
             self.attach_screnshot(timeout=timeout, text='after')
 
+    def locator(self,
+                selector_or_locator: Union[str, "Locator"],
+                *,
+                has_text: Optional[Union[str, Pattern[str]]] = None,
+                has: Optional["Locator"] = None
+                ) -> "WrappedLocator":
+        return patch_locator(super().locator(selector_or_locator, has_text=has_text, has=has))
+
 
 def patch_locator(locator: Locator) -> WrappedLocator:
-    # locator.click = functools.partial(WrappedLocator.click, locator)
     locator.__class__ = WrappedLocator
     return locator
 
@@ -86,9 +111,6 @@ class LocatorDescriptor:
 
     def __get__(self, obj, obj_type=None) -> WrappedLocator:
         locator: Locator = getattr(obj, self.private_name)
-        # if os.getenv('IS_DEBUG_LOCATORS', 'true').upper() == 'TRUE':
-        #     locator.highlight()
-        #     locator.page.wait_for_timeout(2000)
         locator = patch_locator(locator)
         return locator
 
@@ -113,7 +135,13 @@ def wrapped_expect(actual: APIResponse, message: Optional[str] = None) -> APIRes
 
 def wrapped_expect(
     actual: Union[Page, Locator, APIResponse], message: Optional[str] = None
-) -> Union[PageAssertions, LocatorAssertions, APIResponseAssertions]:
+) -> Union[
+    "WrappedPageAssertions",
+    PageAssertions,
+    "WrappedLocatorAssertions",
+    LocatorAssertions,
+    APIResponseAssertions
+]:
     if isinstance(actual, Page):
         return WrappedPageAssertions(PageAssertionsImpl(actual._impl_obj, message=message))
     elif isinstance(actual, Locator):
@@ -153,7 +181,7 @@ def add_to_negative_expect(func):
 
 
 class WrappedLocatorAssertions(LocatorAssertions):
-    actual: WrappedLocator = None
+    actual: Optional[WrappedLocator] = None
 
     @add_to_positive_expect
     def to_contain_text(self, *args, **kwargs) -> None:

@@ -51,7 +51,7 @@ class AllureVideoSettings(ABC):
             if videodata is not None:
                 allure.attach(
                     videodata,
-                    name=f"{video_path} - {request.node.name} - {i}",
+                    name=f"{request.node.name} - {i}",
                     attachment_type=attachment_type.WEBM)
 
 
@@ -103,7 +103,7 @@ class VideoNoKeepNoAttach(AllureVideoSettings):
         self.remove_artifacts()
 
     def set_video_path_list(self, *args, **kwargs):
-        pass
+        return None
 
 
 class VideoSettingsStrategy:
